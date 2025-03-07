@@ -18,6 +18,19 @@ def process_agents(data, agent_codes):
 
     # Define patterns to extract required information
     agent_pattern = re.compile(r"Agency Code/Name\s*:\s*([A-Za-z0-9]+)\s*\((.*?)\)")
+
+    # Define patterns for each Dr. Amount field
+    patterns = {
+        "First_Comm_Participating": re.compile(r"\|\s*11272100\s*\|\s*First Comm Participating\s*\|\s*(\d+\.\d+)\s*\|"),
+        "First_Year_Comm_Participating": re.compile(r"\|\s*11270600\s*\|\s*First Year Comm Participating\s*\|\s*(\d+\.\d+)\s*\|"),
+        "Bonus_Comm_Participating": re.compile(r"\|\s*11271200\s*\|\s*Bonus Comm Participating\s*\|\s*(\d+\.\d+)\s*\|"),
+        "Renewal_Comm_Participating": re.compile(r"\|\s*11273100\s*\|\s*Renewal Comm Participating\s*\|\s*(\d+\.\d+)\s*\|"),
+        "Comm_Other_FY_Prem": re.compile(r"\|\s*96270600\s*\|\s*Comm. on Other FY Prem. to Agents\(873\)\s*\|\s*(\d+\.\d+)\s*\|"),
+        "Bonus_Comm_Agents": re.compile(r"\|\s*96271100\s*\|\s*Bonus Comm. to Agents\(873\)\s*\|\s*(\d+\.\d+)\s*\|"),
+        "Income_Tax": re.compile(r"\|\s*11110300\s*\|\s*Income Tax\s*\|\s*(\d+\.\d+)\s*\|"),
+    }
+
+    # Pattern to extract Cr. Amount values
     cr_amount_pattern = re.compile(r"\|\s*\d+\s*\|\s*.*?\s*\|\s*\d+\.\d+\s*\|\s*(\d+\.\d+)\s*\|")
 
     # Split the data by vouchers
@@ -35,15 +48,31 @@ def process_agents(data, agent_codes):
         if agent_code not in agent_codes:
             continue
 
+        # Extract Dr. Amounts using patterns
+        extracted_values = {key: pattern.search(voucher) for key, pattern in patterns.items()}
+        dr_amounts = {key: (float(match.group(1)) if match else "-") for key, match in extracted_values.items()}
+
+        # Calculate the sum of Dr. Amounts (only numeric values)
+        sum_dr_amount = sum(value for value in dr_amounts.values() if isinstance(value, float)) if any(isinstance(value, float) for value in dr_amounts.values()) else "-"
+
         # Extract Cr. Amounts
         cr_amounts = cr_amount_pattern.findall(voucher)
         total_cr_amount = sum(map(float, cr_amounts))
 
         # Add to results
         if agent_code in results:
-            results[agent_code]['Cr_Amount'] += total_cr_amount
+            for key in dr_amounts:
+                if isinstance(dr_amounts[key], float):
+                    results[agent_code][key] += dr_amounts[key]
+            results[agent_code]["Sum_Dr_Amount"] += sum_dr_amount if isinstance(sum_dr_amount, float) else 0
+            results[agent_code]["Cr_Amount"] += total_cr_amount
         else:
-            results[agent_code] = {'Name': agent_name, 'Cr_Amount': total_cr_amount}
+            results[agent_code] = {
+                "Name": agent_name,
+                **dr_amounts,
+                "Sum_Dr_Amount": sum_dr_amount,
+                "Cr_Amount": total_cr_amount,
+            }
 
     return results
 
